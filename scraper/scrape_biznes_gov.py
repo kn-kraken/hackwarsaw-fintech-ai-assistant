@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from google.cloud import firestore
 from google.oauth2 import service_account
+from vertexai.language_models import TextEmbeddingModel
 
 
 service_account_path = 'service-account.json'
@@ -15,12 +16,13 @@ db = firestore.Client(
     credentials=credentials,
     project=credentials.project_id
 )
-collection_name = 'biznes-gov-pl'
+collection_name = 'biznes-gov-pl-embeddings'
+
+text_embedding_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
 
 start_url = 'https://www.biznes.gov.pl/pl/portal/0516'
 
 driver = webdriver.Chrome()
-
 driver.get(start_url)
 
 WebDriverWait(driver, 10).until(
@@ -51,7 +53,7 @@ for idx, doc in enumerate(DOCS):
     
     topic_soup = BeautifulSoup(topic_html, 'html.parser')
 
-    doc["articles"] = []
+    # doc["articles"] = []
 
     articles_list = topic_soup.find('ul', class_='content-list mt-0')
     articles = articles_list.find_all('li')
@@ -67,11 +69,16 @@ for idx, doc in enumerate(DOCS):
         article_html = driver.page_source
         article_soup = BeautifulSoup(article_html, 'html.parser')
 
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '.col-12 col-md-7 position-static'))
+        )
+
         article_content_outer = article_soup.find('div', class_='col-12 col-md-7 position-static')
         try:
             content_raw = article_content_outer.find('div')
             content_clean = content_raw.get_text(separator=' ', strip=True)
-            doc["articles"].append({'article': article_title, 'article_url': article_url, 'content_raw': content_raw, 'content_clean': content_clean})
+            content_embedding = text_embedding_model.get_embeddings([content_clean])[0].values
+            # doc["articles"].append({'article': article_title, 'article_url': article_url, 'content_raw': content_raw, 'content_clean': content_clean})
             doc_ref = db.collection(collection_name).document()
             doc_ref.set({
                 'topic': doc['topic'],
@@ -79,9 +86,10 @@ for idx, doc in enumerate(DOCS):
                 'article': article_title,
                 'article_url': article_url,
                 'content_raw': str(content_raw),
-                'content_clean': content_clean
+                'content_clean': content_clean,
+                'content_embedding': content_embedding
             })
-        except AttributeError:
-            print(f"Error in article at {article_url}")
+        except Exception as e:
+            print(f"Error in article at {article_url}\n{e}")
        
 driver.quit()
