@@ -9,15 +9,12 @@ start_url = 'https://www.biznes.gov.pl/pl/portal/0516'
 
 driver = webdriver.Chrome()
 
-# Fetch the initial page
 driver.get(start_url)
 
-# Allow some time for dynamic content to load, or use an explicit wait
 WebDriverWait(driver, 10).until(
     EC.presence_of_element_located((By.CSS_SELECTOR, 'ul.row.tiles.list-unstyled'))
 )
 
-# Now parse the page with BeautifulSoup
 page_html = driver.page_source
 page_soup = BeautifulSoup(page_html, 'html.parser')
 
@@ -32,30 +29,38 @@ for topic in topics:
     DOCS.append({'topic': topic_title, 'topic_url': f'https://biznes.gov.pl/pl/portal/{topic_url}'})
 
 for idx, doc in enumerate(DOCS):
-    # Fetch the page using Selenium to ensure all dynamic content is loaded
     driver.get(doc['topic_url'])
     
-    # Allow time for dynamic content to load
     WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, '#insidecontent'))
     )
 
-    doc_html = driver.page_source
+    topic_html = driver.page_source
     
-    # Process the page with BeautifulSoup
-    doc_soup = BeautifulSoup(doc_html, 'html.parser')
+    topic_soup = BeautifulSoup(topic_html, 'html.parser')
 
     doc["articles"] = []
 
-    content_list = doc_soup.find('ul', class_='content-list mt-0')
-    content_items = content_list.find_all('li')
-    for item in content_items:
-        a_tag = item.find('a', class_='title')
+    articles_list = topic_soup.find('ul', class_='content-list mt-0')
+    articles = articles_list.find_all('li')
+    for article in articles:
+        a_tag = article.find('a', class_='title')
         if a_tag is None:
             continue
         title = a_tag.get_text(strip=True)
         url = f"https://www.biznes.gov.pl{a_tag['href']}"
 
-        doc["articles"].append({'article': title, 'article_url': url})
+        driver.get(url)
 
+        article_html = driver.page_source
+        article_soup = BeautifulSoup(article_html, 'html.parser')
+
+        article_content_outer = article_soup.find('div', class_='col-12 col-md-7 position-static')
+        try:
+            content_raw = article_content_outer.find('div')
+            content_clean = content_raw.get_text(separator=' ', strip=True)
+            doc["articles"].append({'article': title, 'article_url': url, 'content_raw': content_raw, 'content_clean': content_clean})
+        except AttributeError:
+            print(f"Error in article at {url}")
+       
 driver.quit()
