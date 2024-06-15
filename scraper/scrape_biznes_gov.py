@@ -3,7 +3,19 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from google.cloud import firestore
+from google.oauth2 import service_account
 
+
+service_account_path = 'service-account.json'
+credentials = service_account.Credentials.from_service_account_file(service_account_path)
+
+db = firestore.Client(
+    database='hackwarsaw-fintech-rag-db',
+    credentials=credentials,
+    project=credentials.project_id
+)
+collection_name = 'biznes-gov-pl'
 
 start_url = 'https://www.biznes.gov.pl/pl/portal/0516'
 
@@ -47,10 +59,10 @@ for idx, doc in enumerate(DOCS):
         a_tag = article.find('a', class_='title')
         if a_tag is None:
             continue
-        title = a_tag.get_text(strip=True)
-        url = f"https://www.biznes.gov.pl{a_tag['href']}"
+        article_title = a_tag.get_text(strip=True)
+        article_url = f"https://www.biznes.gov.pl{a_tag['href']}"
 
-        driver.get(url)
+        driver.get(article_url)
 
         article_html = driver.page_source
         article_soup = BeautifulSoup(article_html, 'html.parser')
@@ -59,8 +71,17 @@ for idx, doc in enumerate(DOCS):
         try:
             content_raw = article_content_outer.find('div')
             content_clean = content_raw.get_text(separator=' ', strip=True)
-            doc["articles"].append({'article': title, 'article_url': url, 'content_raw': content_raw, 'content_clean': content_clean})
+            doc["articles"].append({'article': article_title, 'article_url': article_url, 'content_raw': content_raw, 'content_clean': content_clean})
+            doc_ref = db.collection(collection_name).document()
+            doc_ref.set({
+                'topic': doc['topic'],
+                'topic_url': doc['topic_url'],
+                'article': article_title,
+                'article_url': article_url,
+                'content_raw': str(content_raw),
+                'content_clean': content_clean
+            })
         except AttributeError:
-            print(f"Error in article at {url}")
+            print(f"Error in article at {article_url}")
        
 driver.quit()
