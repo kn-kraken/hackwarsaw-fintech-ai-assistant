@@ -1,3 +1,6 @@
+import base64
+import json
+import os
 import pandas as pd
 import vertexai
 from vertexai.generative_models import GenerativeModel
@@ -10,9 +13,14 @@ from ast import literal_eval
 
 from app.modules.rag import generate_model_response
 
-service_account_path = 'service-account.json'
+service_account_key_base64 = os.getenv("SERVICE_ACCOUNT_KEY_BASE64")
+if not service_account_key_base64:
+    raise ValueError("SERVICE_ACCOUNT_KEY_BASE64 environment variable is not set.")
 
-credentials = service_account.Credentials.from_service_account_file(service_account_path)
+service_account_key = base64.b64decode(service_account_key_base64).decode("utf-8")
+cred_dict = json.loads(service_account_key)
+
+credentials = service_account.Credentials.from_service_account_info(cred_dict)
 vertexai.init(project="hackwarsaw", location="us-central1", credentials=credentials)
 model = GenerativeModel(
     "gemini-1.5-flash-001",
