@@ -8,8 +8,9 @@ from vertexai.language_models import TextEmbeddingModel
 from google.cloud import storage
 from google.oauth2 import service_account
 from fastapi import FastAPI, Depends
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from ast import literal_eval
+from typing import Generator
 
 from app.modules.rag import generate_model_response
 
@@ -64,11 +65,24 @@ async def docs_redirect():
 @app.get("/generate", response_model=str)
 async def generate(
     query: str,
-    stream: bool = False,
     model: GenerativeModel = Depends(get_model),
     text_embedding_model: TextEmbeddingModel = Depends(get_text_embedding_model),
     data: pd.DataFrame = Depends(get_data),
-):
-    return generate_model_response(
-        model, text_embedding_model, query, data, stream=stream
-    )
+) -> str:
+    return generate_model_response(model, text_embedding_model, query, data)
+
+
+@app.get("/generate-stream")
+async def generate_stream(
+    query: str,
+    model: GenerativeModel = Depends(get_model),
+    text_embedding_model: TextEmbeddingModel = Depends(get_text_embedding_model),
+    data: pd.DataFrame = Depends(get_data),
+) -> StreamingResponse:
+    def stream_response() -> Generator[str, None, None]:
+        for response in generate_model_response(
+            model, text_embedding_model, query, data, stream=True
+        ):
+            yield response
+
+    return StreamingResponse(stream_response(), media_type="text/plain")
