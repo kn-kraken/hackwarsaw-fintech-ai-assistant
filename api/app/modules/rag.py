@@ -68,7 +68,7 @@ def generate_model_response(
     query: str,
     data: pd.DataFrame,
     top_n: int = 1,
-    stream: bool = True,
+    stream: bool = False,
 ) -> str | Generator[str, None, None]:
     relevant_data = search_similar(
         text_embedding_model, query, data.copy(), "content_embedding", top_n
